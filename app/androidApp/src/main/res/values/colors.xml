@@ -2,4 +2,5 @@
 <resources>
     <color name="hazri_background">#0F1115</color>
     <color name="hazri_nav_background">#12151A</color>
+    <color name="ic_launcher_background">#131B2E</color>
 </resources>

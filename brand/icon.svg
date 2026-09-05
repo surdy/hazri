@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 96 96" role="img" aria-label="hazri">
+  <rect x="4" y="4" width="88" height="88" rx="21" fill="#131b2e"/>
+  <rect x="27" y="24" width="42" height="48" rx="5" fill="#34d399"/>
+  <rect x="27" y="24" width="14" height="9" rx="3" fill="#f1f5f9"/>
+  <path d="M35,50 L45,60 L62,41" fill="none" stroke="#131b2e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

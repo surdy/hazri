@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="240" viewBox="0 0 1000 240" role="img" aria-label="hazri — roll call for your presence nodes">
+  <defs>
+    <linearGradient id="quad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.33" stop-color="#a78bfa"/>
+      <stop offset="0.66" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <rect width="1000" height="240" rx="24" fill="#0d1320"/>
+  <svg x="56" y="52" width="136" height="136" viewBox="0 0 96 96">
+    <rect x="4" y="4" width="88" height="88" rx="21" fill="#131b2e"/>
+    <rect x="27" y="24" width="42" height="48" rx="5" fill="#34d399"/>
+  <rect x="27" y="24" width="14" height="9" rx="3" fill="#f1f5f9"/>
+  <path d="M35,50 L45,60 L62,41" fill="none" stroke="#131b2e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <text x="228" y="116" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="66" font-weight="600" fill="#e8eef7">hazri</text>
+  <text x="231" y="156" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#8fa0b8">roll call for your presence nodes</text>
+  <rect x="228" y="182" width="716" height="6" rx="3" fill="url(#quad)"/>
+</svg>

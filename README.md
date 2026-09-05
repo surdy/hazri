@@ -1,4 +1,6 @@
-# Hazri
+<p align="center">
+  <img src="brand/header.svg" alt="hazri — roll call for your presence nodes" width="720">
+</p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
