@@ -59,6 +59,13 @@ class SurveyViewModel(
     private val engine: SignalEngine,
     private val scope: CoroutineScope,
     private val clock: MillisClock = SystemClock,
+    /**
+     * What keeps the phone collecting while the screen is off.
+     *
+     * Defaulted to the no-op so that a test, or a platform with no service to start, wires
+     * nothing. See [SurveyKeepAlive].
+     */
+    private val keepAlive: SurveyKeepAlive = SurveyKeepAlive.None,
 ) {
     private val state = MutableStateFlow(SurveyState())
     val uiState: StateFlow<SurveyState> = state.asStateFlow()
@@ -66,6 +73,9 @@ class SurveyViewModel(
     private var accumulator: SurveyAccumulator? = null
     private var collectJob: Job? = null
     private var tickJob: Job? = null
+
+    /** When [keepAlive] was last told anything. The throttle in [publish]. */
+    private var keepAliveAt: Long = 0L
 
     init {
         scope.launch {
@@ -119,6 +129,16 @@ class SurveyViewModel(
             runningVerdict = null,
         )
 
+        // Dated a full interval back so the first tick publishes real numbers rather than
+        // leaving the notification on "0:00 · 0 samples" for a second.
+        keepAliveAt = startedAt - KEEP_ALIVE_MILLIS
+        keepAlive.start(room)
+
+        // A recording is the one time the scan is worth its full duty cycle: the walk is
+        // short, the phone is moving, and a reading that arrives a second late is a reading
+        // of the wrong spot. A no-op for the sources that are not a BLE scan.
+        engine.useSurveyScanRate(true)
+
         // The simulated walker does not know which room was tapped, so a Kitchen recording
         // taken while the loop happens to be in the hallway would be won by the Hall node.
         // Holding the walk in the selected room for the recording is what makes the
@@ -138,6 +158,8 @@ class SurveyViewModel(
     fun stop() {
         val finished = accumulator ?: return
         engine.pinSimulatedRoom(null)
+        engine.useSurveyScanRate(false)
+        keepAlive.stop()
         collectJob?.cancel()
         collectJob = null
         tickJob?.cancel()
@@ -156,12 +178,24 @@ class SurveyViewModel(
     }
 
     private fun publish(accumulator: SurveyAccumulator, startedAt: Long) {
+        val now = clock.now()
         state.value = state.value.copy(
-            elapsedMillis = clock.now() - startedAt,
+            elapsedMillis = now - startedAt,
             sampleCount = accumulator.sampleCount,
             liveStats = accumulator.statsNow(),
             runningVerdict = accumulator.verdictNow(repository.settings.value.thresholds()),
             displayNames = repository.displayNames(),
+        )
+        // The screen ticks four times a second; the notification shows whole seconds and a
+        // count, so redrawing it that often would be three redraws of the same text.
+        if (now - keepAliveAt < KEEP_ALIVE_MILLIS) return
+        keepAliveAt = now
+        keepAlive.update(
+            SurveyProgress(
+                room = accumulator.room,
+                elapsedMillis = now - startedAt,
+                sampleCount = accumulator.sampleCount,
+            )
         )
     }
 
@@ -188,5 +222,8 @@ class SurveyViewModel(
 
     private companion object {
         const val TICK_MILLIS = 400L
+
+        /** The floor on how often [keepAlive] is told anything. */
+        const val KEEP_ALIVE_MILLIS = 1_000L
     }
 }

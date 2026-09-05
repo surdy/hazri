@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The ongoing survey notification's status-bar icon.
+
+  The launcher's monochrome silhouette — the register with the tick knocked out — scaled
+  from its 108dp artboard to fill a 24dp status-bar slot. The path data is the launcher
+  icon's verbatim, so the two glyphs cannot drift apart.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:scaleX="0.4583"
+        android:scaleY="0.4583"
+        android:translateX="-10"
+        android:translateY="-10">
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M32,24h32a5,5 0 0 1 5,5v38a5,5 0 0 1 -5,5h-32a5,5 0 0 1 -5,-5v-38a5,5 0 0 1 5,-5zM35,50L45,60L62,41" />
+    </group>
+</vector>

@@ -48,12 +48,20 @@ class AppContainer(
     private val clock: MillisClock = SystemClock,
     /** Whether the simulated source is offered. Debug builds only. */
     val simulationAvailable: Boolean = true,
+    /**
+     * What keeps a recording collecting while the app is backgrounded.
+     *
+     * The no-op default is the right one everywhere except Android, where it is the handle
+     * on a foreground service. See [SurveyKeepAlive].
+     */
+    keepAlive: SurveyKeepAlive = SurveyKeepAlive.None,
 ) {
     val engine: SignalEngine = SignalEngine(repository, scope, clock)
 
     private var mqttSource: MqttSignalSource? = null
+    private var started = false
 
-    val survey: SurveyViewModel = SurveyViewModel(repository, engine, scope, clock)
+    val survey: SurveyViewModel = SurveyViewModel(repository, engine, scope, clock, keepAlive)
     val coverage: CoverageViewModel = CoverageViewModel(repository, scope)
     val tools: ToolsViewModel = ToolsViewModel(repository, engine, scope)
     val settings: SettingsViewModel = SettingsViewModel(repository, ::switchSource)
@@ -83,8 +91,17 @@ class AppContainer(
         if (requested == SourceKind.SIMULATED && !simulationAvailable) SourceKind.DIRECT
         else requested
 
-    /** Seeds an empty install and starts the source the settings name. */
+    /**
+     * Seeds an empty install and starts the source the settings name.
+     *
+     * Idempotent, and called from the UI rather than from wherever the process happened to
+     * be built. A process started for a content-provider read or a service restart has no
+     * screen and nothing that would ever stop a scan it began, so the graph is constructed
+     * eagerly and started only when something is going to look at it.
+     */
     fun start() {
+        if (started) return
+        started = true
         if (simulationAvailable) DemoSeed.seedIfEmpty(repository, clock.now())
         scope.launch { switchSource(repository.settings.value.sourceKind) }
     }

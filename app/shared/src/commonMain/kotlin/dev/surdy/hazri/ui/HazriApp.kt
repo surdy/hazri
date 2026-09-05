@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,6 +64,17 @@ interface PlatformActions {
 
     /** Offers [content] to be saved or sent as [fileName]. */
     fun shareText(fileName: String, content: String)
+
+    /**
+     * Asks for whatever the platform needs before a recording can show its ongoing
+     * notification. Called when the Survey tab opens, so the dialog is in context rather
+     * than on first launch.
+     *
+     * Defaulted to nothing: a platform with no such permission, and every fake, wants no
+     * implementation at all. Refusal is not an error — the recording still runs, with
+     * nothing on screen to say so.
+     */
+    fun requestSurveyNotificationPermission() {}
 }
 
 /**
@@ -80,9 +92,16 @@ interface PlatformActions {
 @OptIn(ExperimentalComposeUiApi::class)
 @Suppress("DEPRECATION")
 @Composable
-fun HazriApp(container: AppContainer, actions: PlatformActions) {
+fun HazriApp(
+    container: AppContainer,
+    actions: PlatformActions,
+    /**
+     * The back stack. Passed in where the platform needs to drive it from outside the
+     * composition — on Android, the survey notification opening the Survey tab.
+     */
+    navigator: Navigator = remember { Navigator() },
+) {
     HazriTheme {
-        val navigator = remember { Navigator() }
         val scope = rememberCoroutineScope()
         val sources = remember(container) { container.availableSources() }
 
@@ -111,6 +130,9 @@ fun HazriApp(container: AppContainer, actions: PlatformActions) {
 
                     Destination.Survey -> {
                         val state by container.survey.uiState.collectAsState()
+                        // Asked for here rather than at the Record tap: the dialog and the
+                        // first notification would otherwise land in the same frame.
+                        LaunchedEffect(Unit) { actions.requestSurveyNotificationPermission() }
                         SurveyScreen(
                             state = state,
                             onSelectRoom = container.survey::selectRoom,

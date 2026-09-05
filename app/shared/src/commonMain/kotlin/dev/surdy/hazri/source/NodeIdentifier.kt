@@ -71,6 +71,51 @@ object IBeaconParser {
     private const val HEX: String = "0123456789abcdef"
 }
 
+/**
+ * The scan filter a survey runs with, as manufacturer-specific data bytes.
+ *
+ * Android stops delivering the results of an **unfiltered** scan once the screen goes off,
+ * from 8.1 onwards and whether or not a foreground service is holding the process up. A
+ * survey is a walk with the phone in a pocket, so the resting scan's "hear everything"
+ * would hear nothing exactly when it matters. One filter is enough to lift that, and the
+ * narrowest honest one is the frame every node advertises: Apple's company id, the
+ * proximity-beacon header `02 15`, and the fixed half of [Espresense.NODE_BEACON_UUID].
+ *
+ * The first eight UUID bytes are all of it that carries information — the rest is
+ * `0000-000000000000` — and stopping there leaves major and minor free, which is what makes
+ * this one filter match every node in the house.
+ *
+ * The cost is that a filtered scan reports nothing else, so Tools -> Nodes & rooms sees no
+ * new unidentified advertisers while a survey runs. The resting scan stays unfiltered,
+ * which is when that list is read anyway.
+ */
+object NodeBeaconFilter {
+
+    /** The company identifier the frame is advertised under. */
+    const val COMPANY_ID: Int = IBeaconParser.APPLE_COMPANY_ID
+
+    /** How much of the UUID is matched. The remaining eight bytes are zeroes. */
+    private const val PREFIX_BYTES: Int = 8
+
+    /**
+     * `02 15` then the first eight bytes of the node beacon UUID, in advertised order.
+     *
+     * Derived from [Espresense.NODE_BEACON_UUID] rather than typed out, so a firmware that
+     * changes the UUID changes the filter with it.
+     */
+    val DATA: ByteArray = byteArrayOf(0x02, 0x15) + uuidPrefixBytes(PREFIX_BYTES)
+
+    /** All ones: every byte of [DATA] has to match exactly. */
+    val DATA_MASK: ByteArray = ByteArray(DATA.size) { 0xFF.toByte() }
+
+    private fun uuidPrefixBytes(count: Int): ByteArray {
+        val hex = Espresense.NODE_BEACON_UUID.filter { it != '-' }
+        return ByteArray(count) { index ->
+            hex.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+    }
+}
+
 /** Turns an advertisement into a node identity, or admits it cannot. */
 interface NodeIdentifier {
     /** The node this advertisement belongs to, or `null` if it is not a node at all. */

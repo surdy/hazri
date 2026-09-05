@@ -1,49 +1,51 @@
 package dev.surdy.hazri.android
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import dev.surdy.hazri.data.AndroidFileStore
-import dev.surdy.hazri.data.HazriRepository
+import androidx.core.content.ContextCompat
 import dev.surdy.hazri.data.SourceKind
+import dev.surdy.hazri.ui.Destination
 import dev.surdy.hazri.ui.HazriApp
+import dev.surdy.hazri.ui.Navigator
 import dev.surdy.hazri.vm.AppContainer
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * The only Activity.
  *
- * It builds the object graph, asks for the scan permissions if direct mode is what the
- * settings say, and hands everything to [HazriApp]. The permission request is deliberately
- * not on first launch for its own sake: in a debug build the app starts in simulated mode
- * and there is nothing to scan, so asking would be a dialog with no purpose behind it.
+ * It no longer builds the object graph — [HazriApplication] does, because the survey
+ * service reads the same one — so what is left here is the two runtime permissions, the
+ * navigation stack and the engine's screen-on lifetime. The permission requests are
+ * deliberately not on first launch for their own sake: in a debug build the app starts in
+ * simulated mode, so a scan permission asked for then would be a dialog with nothing
+ * behind it.
  */
 class MainActivity : ComponentActivity() {
 
-    private lateinit var container: AppContainer
+    private val container: AppContainer get() = hazri.container
 
     /**
-     * The scope everything in the app runs on.
+     * The in-app back stack.
      *
-     * Not `lifecycleScope`: a survey outlives a configuration change, and the sources are
-     * long-lived collectors. The manifest already keeps the Activity through rotation, and
-     * this scope is cancelled in [onDestroy].
+     * Held here rather than remembered in the composable so that the notification's tap
+     * target can select the Survey tab from `onNewIntent`, on an Activity that is already
+     * composed and will not re-run its initial state.
      */
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val navigator = Navigator()
 
     private val permissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
         if (granted.values.all { it }) {
-            appScope.launch { container.switchSource(SourceKind.DIRECT) }
+            container.scope.launch { container.switchSource(SourceKind.DIRECT) }
         } else {
             // Direct mode with no permission produces an empty node list, which looks
             // exactly like a house with no nodes in it. Say what happened instead.
@@ -54,6 +56,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The notification permission, asked for when the Survey tab opens.
+     *
+     * The result is not acted on. Refused, the foreground service still runs and still
+     * keeps the scan alive — Android simply shows nothing for it, which is a worse deal for
+     * the user than it is for the survey.
+     */
+    private val notificationRequest = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Both bars dark: the app has no light theme, and the default edge-to-edge scrim
@@ -63,29 +76,11 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(SYSTEM_BAR_SCRIM),
         )
 
-        val repository = HazriRepository(
-            store = AndroidFileStore(File(filesDir, STORE_DIRECTORY)),
-            // Persistence is four small JSON documents, but noteNode is called from the
-            // sample pipeline dozens of times a second, so the writes belong off the main
-            // thread. The StateFlow update stays synchronous; only the file lands here.
-            //
-            // limitedParallelism(1) rather than plain IO: two saves of one document must
-            // reach the disk in the order they were made. The repository tickets them so it
-            // is correct either way, but a pool that resumes them out of order would make
-            // every write a supersede-and-drop for no reason.
-            writeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1)),
-        )
-        container = AppContainer(
-            repository = repository,
-            sources = AndroidSourceFactory(
-                context = applicationContext,
-                repository = repository,
-                onScanFailed = { message -> container.engine.reportError(message) },
-            ),
-            scope = appScope,
-            simulationAvailable = BuildConfig.SIMULATION_AVAILABLE,
-        )
+        // The graph is built by the Application; started here, because this is the first
+        // point at which something exists that will also stop it. Idempotent, so a second
+        // Activity or a recreation does not restart the sources.
         container.start()
+        openSurveyTabIfAsked(intent)
 
         if (container.repository.settings.value.sourceKind == SourceKind.DIRECT &&
             !BluetoothAvailability.hasScanPermission(this)
@@ -94,31 +89,55 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            HazriApp(container = container, actions = AndroidPlatformActions(applicationContext))
+            HazriApp(
+                container = container,
+                actions = AndroidPlatformActions(
+                    context = applicationContext,
+                    requestNotifications = ::requestNotificationPermission,
+                ),
+                navigator = navigator,
+            )
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        // No foreground service in this pass, so a backgrounded app stops scanning. See the
-        // TODO on DirectScanSource.
-        container.engine.stop()
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openSurveyTabIfAsked(intent)
     }
 
     override fun onStart() {
         super.onStart()
-        if (this::container.isInitialized) appScope.launch { container.engine.start() }
+        container.scope.launch { container.engine.start() }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        appScope.cancel()
+    override fun onStop() {
+        super.onStop()
+        // A backgrounded app stops collecting — unless a survey is recording, in which case
+        // SurveyForegroundService is holding the process up and stopping here would silence
+        // the very thing it is keeping alive.
+        if (!container.survey.uiState.value.isRecording) container.engine.stop()
     }
 
-    private companion object {
-        const val STORE_DIRECTORY = "hazri"
+    private fun openSurveyTabIfAsked(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_SURVEY, false) == true) {
+            navigator.selectTab(Destination.Survey)
+        }
+    }
+
+    /** Asks for [Manifest.permission.POST_NOTIFICATIONS] once, on the versions that have it. */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val held = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+        if (held == PackageManager.PERMISSION_GRANTED) return
+        notificationRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    companion object {
+        /** Set by the survey notification's tap target: open on the Survey tab. */
+        const val EXTRA_OPEN_SURVEY = "dev.surdy.hazri.extra.OPEN_SURVEY"
 
         /** HazriColors.navBackground, as the platform wants it: an opaque ARGB int. */
-        const val SYSTEM_BAR_SCRIM = 0xFF12151A.toInt()
+        private const val SYSTEM_BAR_SCRIM = 0xFF12151A.toInt()
     }
 }

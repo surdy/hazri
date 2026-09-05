@@ -9,13 +9,22 @@ import dev.surdy.hazri.ui.PlatformActions
 import java.io.File
 
 /**
- * Clipboard and share, the two things the UI needs the platform for.
+ * Clipboard, share and the notification permission: what the UI needs the platform for.
  *
  * The export goes through a [FileProvider] rather than an `EXTRA_TEXT` string: a session
  * JSON is tens of kilobytes, which is past what many receiving apps will accept as an
  * extra, and a file is what a spreadsheet wants anyway.
  */
-class AndroidPlatformActions(private val context: Context) : PlatformActions {
+class AndroidPlatformActions(
+    private val context: Context,
+    /**
+     * Asks for POST_NOTIFICATIONS. A lambda because the request needs the Activity's
+     * result registry, and this object is built on the application context.
+     */
+    private val requestNotifications: () -> Unit = {},
+) : PlatformActions {
+
+    override fun requestSurveyNotificationPermission() = requestNotifications()
 
     override fun copyToClipboard(label: String, text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

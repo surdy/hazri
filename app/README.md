@@ -69,6 +69,85 @@ only on first contact. Keying on the room regardless is what used to give one bo
 records: direct samples on one, MQTT samples on the other, a column each in Coverage, and
 nothing for Compare sources to pair. Both orderings are covered by tests.
 
+## Surveying with the screen off
+
+A survey is a walk with the phone in a pocket, which is exactly the state Android stops an
+app's BLE scan and its socket reads in. `SurveyForegroundService` is the answer: it starts
+with a recording and stops with it, and while its notification is up the process keeps its
+foreground importance and the samples keep arriving.
+
+The seam is `vm/SurveyKeepAlive.kt` — three methods and a no-op default, so nothing outside
+Android needs an implementation and the tests use a fake. `SurveyViewModel` calls `start`
+when a recording begins, `update` on its own tick (throttled to once a second, because the
+notification shows whole seconds), and `stop` on every path that ends a recording: the Stop
+button, a source switch, the notification's own Stop action, and the app being swiped out
+of Recents. The Android side writes progress to a `StateFlow` the service collects rather
+than sending an intent per second, since the two are in one process.
+
+The notification shows the room, the elapsed time and the sample count. Tapping it opens
+the app on the Survey tab. Its **Stop** action ends the recording through the same
+`SurveyViewModel.stop` the in-app button calls — so the walk is filed, the simulated pin is
+released and the scan drops back to its resting rate. The service is never the thing that
+decides a survey is over.
+
+The object graph moved with it. `HazriApplication` owns the `AppContainer`, not the
+Activity: the service stops the same survey the user can see, and a second engine with a
+second scanner behind it would have made the notification's Stop action a no-op on the
+recording on screen. A rotation or a back-out-and-return now re-attaches to the running
+sources instead of building new ones. It is *built* there and *started* by
+`MainActivity.onCreate` — a process the system brings up for a content-provider read or a
+service restart has no screen, and a scan begun there would have had nothing to stop it.
+`AppContainer.start` is idempotent, so a recreation does not restart the sources.
+
+| Permission | Why |
+|---|---|
+| `FOREGROUND_SERVICE` | Any foreground service. |
+| `FOREGROUND_SERVICE_CONNECTED_DEVICE` | What a BLE survey is. |
+| `FOREGROUND_SERVICE_DATA_SYNC` | What a survey recorded over MQTT or the simulator is. |
+| `POST_NOTIFICATIONS` | Asked for when the Survey tab opens, on API 33+. |
+
+Three things the platform forces:
+
+- **The type is chosen at start, not in the manifest alone.** From API 34 the platform
+  refuses `connectedDevice` unless the app actually holds a Bluetooth runtime permission,
+  and a survey recorded in MQTT or simulated mode may never have asked for one. Those fall
+  back to `dataSync`, which is what they are doing. Both branches were checked on the
+  emulator: `types=00000010` with the scan permission granted, `types=00000001` without.
+- **A refused notification permission is not an error.** The service still runs and the
+  survey still records; Android simply shows nothing for it. The request is fired when the
+  Survey tab opens and its result is not read.
+- **`START_NOT_STICKY`,** and a start command that finds no recording in progress stops the
+  service instead of going foreground. A process the system restarted has no accumulator
+  left, so there is nothing to keep alive. Stopping before `startForeground` is safe there:
+  the five-second deadline is a delayed message that is cancelled when the service is
+  brought down. A Stop tapped on a notification whose recording has already ended stops the
+  service too, rather than leaving the tap to have started it.
+- **`onTimeout` is handled on both signatures** — API 34's one argument and API 35's two.
+  `dataSync` is capped at six hours a day, and a service that ignores the callback is
+  killed; ending the recording files what has been walked and takes the service down.
+
+**The scan changes shape for a recording, twice over.** Android stops delivering an
+*unfiltered* scan's results once the screen is off, from 8.1 onwards and whether or not a
+foreground service is holding the process up — so a survey walked with the phone in a
+pocket would otherwise hear nothing at all. A recording therefore scans with one filter,
+`source/NodeIdentifier.kt`'s `NodeBeaconFilter`: Apple's company id, the `02 15` proximity
+header, and the fixed eight bytes of `Espresense.NODE_BEACON_UUID`, masked `FF`. Major and
+minor are left free, so one filter matches every node in the house. The bytes are derived
+from the UUID constant rather than typed out, and their order is unit-tested against a
+frame the iBeacon parser agrees is a node.
+
+The cost is that a filtered scan reports nothing else, so Tools -> Nodes & rooms sees no
+new unidentified advertisers while a survey runs. The resting scan stays unfiltered, which
+is when that list is read anyway.
+
+**Battery.** Nothing changes when no survey is recording: the Activity stops the engine in
+`onStop`, and the scan stops with it. A recording is the exception, and when one ends with
+nothing on screen — the notification's Stop, a swipe out of Recents — the engine is stopped
+then instead, because the `onStop` that would have done it has already been and gone.
+During a recording the scan asks for `SCAN_MODE_LOW_LATENCY`; outside one it asks for
+`SCAN_MODE_BALANCED`, which is itself a step up from the platform default of
+`SCAN_MODE_LOW_POWER` this app used to take by omission.
+
 ## Smoke tested
 
 Installed on the `tt_phone` AVD (API 35, 1080x2400) and driven through every screen:
@@ -84,6 +163,32 @@ Installed on the `tt_phone` AVD (API 35, 1080x2400) and driven through every scr
 - Nodes & rooms edits the display name and the firmware room as two separate fields, with
   the room badged confirmed or unconfirmed.
 - Tools and Settings render and navigate. The platform back gesture pops the in-app stack.
+
+The foreground service was driven on the same AVD, on API 34, where the type entitlement is
+enforced: a simulated Kitchen survey started, Home pressed, and after fifteen seconds
+`dumpsys notification` showed `Surveying Kitchen` / `0:35 · 1218 samples` on channel
+`survey` with one Stop action, and `dumpsys activity services` showed
+`isForeground=true types=00000001 stopIfKilled=true`. Left backgrounded the count kept
+climbing at the simulator's full rate — 3125 samples at 01:28 when the notification was
+tapped, which landed on the Survey tab from the Live tab it had been left on. The
+notification's **Stop** filed the walk (Kitchen, Clear · 18 dB, "just now"), released the
+simulated pin and left no service and no notification behind. Repeating it in Direct mode
+with the scan permission granted gave `types=00000010`, the `connectedDevice` branch. With
+nothing recording, a backgrounded app has no service and sits at `LAST` importance, as
+before. No exceptions in logcat across the run.
+
+Re-run after review, on the same AVD:
+
+- The survey filter reaches the platform. With a recording running,
+  `dumpsys bluetooth_manager` shows the ongoing scan as
+  `ScanMode=LOW_LATENCY` with
+  `BluetoothLeScanFilter [ ManufacturerId=76 ManufacturerData=[2, 21, -27, -54, 26, -34, -16, 7, -70, 17] ManufacturerDataMask=[-1 × 10] ]`
+  — `02 15 E5 CA 1A DE F0 07 BA 11` as signed bytes. The resting scans in the same dump are
+  `ScanMode=BALANCED` with no filter.
+- Ending a recording from the background now stops the engine. Process CPU
+  (`/proc/<pid>/stat`) while recording and backgrounded: **145 jiffies per 10 s**. After the
+  notification's Stop, still backgrounded: **0 per 10 s**. Reopening resumed it (27 per 8 s)
+  and the walk was filed — Kitchen, 892 samples over 00:25, "just now".
 
 A reviewer also ran it against `tools/espresense-sim` over a real broker: MQTT mode works
 and the HiveMQ client re-subscribes on reconnect.
@@ -109,8 +214,9 @@ app/
   shared/       KMP library: domain, protocol, sources, data, view models, the whole UI
     commonMain/ everything except two platform seams
     androidMain/ DirectScanSource actual (Kable), HiveMqGateway, AndroidFileStore
-    commonTest/ 200 tests: domain, protocol, sources, repository and every view model
-  androidApp/   Activity, permission flow, DI wiring, clipboard and share intents
+    commonTest/ 227 tests: domain, protocol, sources, repository and every view model
+  androidApp/   Application and object graph, Activity, survey foreground service,
+                permission flow, clipboard and share intents
 ```
 
 `shared/src/commonMain/kotlin/dev/surdy/hazri/`:
@@ -121,7 +227,7 @@ app/
 | `protocol` | ESPresense topics, setting keys, device-report and telemetry parsing |
 | `source` | `SignalSource` and its three implementations, `NodeIdentifier`, `MqttGateway` |
 | `data` | `FileStore`, `HazriRepository`, `AppSettings`, `SessionExport`, `DemoSeed`, `NodeRecord` |
-| `vm` | `SignalEngine` and one view model per screen, plus `AppContainer` |
+| `vm` | `SignalEngine` and one view model per screen, plus `AppContainer` and `SurveyKeepAlive` |
 | `ui` | theme, icons, components, screens, `Navigator` |
 
 ## What is real and what is stubbed
@@ -153,10 +259,8 @@ app/
   own advertisement, so nothing inside this app can confirm the beacon is transmitting.
   The working check is indirect — connect MQTT mode and see whether any node reports this
   phone. Advertising interval and transmit power are readable from the Android platform and
-  are not surfaced yet.
-- **No foreground service.** The scan lives on the Activity's scope and stops when the app
-  is backgrounded, so the screen cannot sleep during a long survey. See the TODO on
-  `DirectScanSource.android.kt`.
+  are not surfaced yet. It is the only stub left: a recording now survives the screen going
+  off, and the mechanism is in *Surveying with the screen off*.
 
 ## Running against the MQTT simulator
 
@@ -254,7 +358,7 @@ Checked 2026-09-04 against `ESPresense/ESPresense` `master` (v4.0.6),
 |---|---|
 | `source/NodeIdentifier.kt` | The node beacon UUID, the major/minor derivation and the retained-config shape are read from firmware source, not measured. Capture one node's advertisement and confirm the UUID byte for byte, that major/minor are stable across reboots, and that the retained config appears under exactly that fingerprint. Unidentified advertisers are surfaced in a debug list rather than dropped, which is the capture this needs. |
 | `source/NodeIdentifier.kt` | Current firmware calls `NimBLEDevice::init("ESPresense")`, so the advertised local name is a fleet-wide constant and identifies the firmware, not the room. If a build is found that suffixes it, the suffix path already handles it. |
-| `source/DirectScanSource.android.kt` | No foreground service. A survey scan should survive the screen sleeping. Needs a notification channel, a service lifecycle and a permission asked for in context — none of it testable without a node to scan for. |
+| `source/DirectScanSource.android.kt` | A recording scans filtered, at `SCAN_MODE_LOW_LATENCY`, behind the foreground service. The filter bytes come from `Espresense.NODE_BEACON_UUID` and are read from firmware source, not measured — the same capture that confirms the UUID confirms the filter, since a wrong one produces a walk that hears nothing and looks like a house out of range. |
 | `ui/screen/ToolDetailScreens.kt` | Beacon check is a placeholder. Advertising interval and transmit power are readable on Android; worth surfacing once there is a node to verify the readings against. |
 | `androidApp/proguard-rules.pro` | Release is not minified. HiveMQ's Netty transport and its reflective event dispatch will need keeps before it can be. |
 | `ui/HazriApp.kt` | `BackHandler` is both experimental and deprecated in CMP 1.11, which points at `NavigationEventHandler` — a class the `ui-backhandler` artifact of this version does not ship. Revisit when it does. |

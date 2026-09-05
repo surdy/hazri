@@ -88,3 +88,29 @@ class FakeSourceFactory(
         return simulated ?: SimulatedSignalSource(scope = scope)
     }
 }
+
+/**
+ * A [SurveyKeepAlive] that records what it was told.
+ *
+ * Lists rather than counters: the bugs worth catching are a stop that never came, a start
+ * announced with the wrong room, and an update per tick instead of per second, and all
+ * three are questions about the sequence.
+ */
+class FakeSurveyKeepAlive : SurveyKeepAlive {
+    val started = mutableListOf<String>()
+    val updates = mutableListOf<SurveyProgress>()
+    var stops: Int = 0
+        private set
+
+    override fun start(room: String) {
+        started += room
+    }
+
+    override fun update(progress: SurveyProgress) {
+        updates += progress
+    }
+
+    override fun stop() {
+        stops += 1
+    }
+}

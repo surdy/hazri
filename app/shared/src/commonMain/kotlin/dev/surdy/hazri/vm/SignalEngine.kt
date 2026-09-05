@@ -13,6 +13,7 @@ import dev.surdy.hazri.domain.RssiSmoother
 import dev.surdy.hazri.domain.SignalSample
 import dev.surdy.hazri.domain.SignalStats
 import dev.surdy.hazri.protocol.Espresense
+import dev.surdy.hazri.source.DirectScanSource
 import dev.surdy.hazri.source.MillisClock
 import dev.surdy.hazri.source.SignalSource
 import dev.surdy.hazri.source.SimulatedSignalSource
@@ -184,6 +185,17 @@ class SignalEngine(
      */
     fun pinSimulatedRoom(room: String?) {
         (source as? SimulatedSignalSource)?.pinTo(room)
+    }
+
+    /**
+     * Asks the running source for its survey duty cycle, or releases it back to the resting
+     * one.
+     *
+     * A no-op unless the running source is a BLE scan — nothing else on Android has a duty
+     * cycle to trade against battery. See [DirectScanSource.useSurveyScanRate].
+     */
+    fun useSurveyScanRate(active: Boolean) {
+        (source as? DirectScanSource)?.useSurveyScanRate(active)
     }
 
     /** Starts the current source. No-op when there is none or it is already running. */

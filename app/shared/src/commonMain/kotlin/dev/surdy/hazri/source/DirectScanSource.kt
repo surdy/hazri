@@ -34,4 +34,15 @@ expect class DirectScanSource : SignalSource {
 
     /** Forgets everything in [unidentified]. */
     fun clearUnidentified()
+
+    /**
+     * Switches the scan between its survey duty cycle and its resting one.
+     *
+     * A BLE scan is a radio duty cycle, and the platform's default is the slowest of them.
+     * A survey is a walk of a few minutes in which every second of lag is a reading of the
+     * wrong spot, so it gets the fastest; the rest of the time the app is a status display
+     * and the balanced rate is plenty. Restarting the scan is what applies the change, so
+     * this is a no-op when the rate is already the one asked for.
+     */
+    fun useSurveyScanRate(active: Boolean)
 }
