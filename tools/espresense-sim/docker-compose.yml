@@ -1,0 +1,40 @@
+# A broker plus a houseful of simulated ESPresense nodes.
+#
+#   docker compose up
+#
+# Point the Hazri app at <your machine's LAN IP>:1883 (an Android emulator
+# reaches the host at 10.0.2.2). Anonymous access is on; keep this off any
+# network you do not trust.
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: hazri-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883" # MQTT
+      - "9001:9001" # MQTT over websockets
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sim:
+    build: .
+    container_name: hazri-espresense-sim
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    # Edit espresense_sim/config/house.yaml or walk.yaml and restart this
+    # service; the directory is mounted, so there is nothing to rebuild.
+    volumes:
+      - ./espresense_sim/config:/app/espresense_sim/config:ro
+    command:
+      - --host=mosquitto
+      - --port=1883
+      - --device-id=phone:hazri-test
+      - --seed=1

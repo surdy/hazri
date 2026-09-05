@@ -1,0 +1,15 @@
+# A survey walk: stand in each room for a while, then move on. Loops forever.
+# `room` puts the waypoint at the room's centre; give x/y to override.
+# dwell is seconds standing still; legs between waypoints run at `speed`.
+
+speed: 1.0  # m/s, an unhurried indoor walking pace
+
+waypoints:
+  - { room: living,  dwell: 30 }
+  - { room: kitchen, dwell: 30 }
+  - { room: hall,    dwell: 15 }
+  - { room: bedroom, dwell: 30 }
+  - { room: office,  dwell: 30 }
+  - { room: hall,    dwell: 10 }
+  # The garage has no node: this leg is where every node should go quiet.
+  - { room: garage,  dwell: 20 }

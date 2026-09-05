@@ -1,0 +1,58 @@
+# Default Hazri test house. Metres, origin at the bottom-left corner.
+#
+#   y=11 +-----------------+
+#        | bedroom | office |
+#   y=7  +-----------------+---------+
+#        |      hall       |         |
+#   y=5  +--------+--------+ garage  |
+#        | living | kitchen|         |
+#   y=0  +--------+--------+---------+
+#      x=0       5        9         13
+#
+# Node names follow the plan's convention: the room name, lower case, one word.
+# The garage deliberately has no node - it is the blind spot the Coverage
+# screen should call out.
+
+rooms:
+  living:  { bounds: [0, 0, 5, 5] }
+  kitchen: { bounds: [5, 0, 9, 5] }
+  hall:    { bounds: [0, 5, 9, 7] }
+  bedroom: { bounds: [0, 7, 4, 11] }
+  office:  { bounds: [4, 7, 9, 11] }
+  garage:  { bounds: [9, 0, 13, 5] }
+
+# z is the height the board hangs at; the phone is carried at phone_height_m.
+#
+# antenna_offset_db is physical: how hot or cold this board's radio reads.
+# A bare ESP32-S3 reads roughly 20 dB hot, which is precisely what the
+# firmware's rx_adj_rssi default of 20 on the esp32s3 builds cancels
+# (include/defaults.h). The kitchen node is deliberately 3 dB deaf relative to
+# the rest, so tuning its rx_adj_rssi is a real finding for the app to make.
+nodes:
+  living:  { room: living,  x: 1.0, y: 1.0, z: 1.6, antenna_offset_db: 20.0 }
+  kitchen: { room: kitchen, x: 8.0, y: 1.2, z: 2.0, antenna_offset_db: 17.0 }
+  hall:    { room: hall,    x: 4.5, y: 6.0, z: 2.2, antenna_offset_db: 20.0 }
+  bedroom: { room: bedroom, x: 1.5, y: 9.5, z: 1.4, antenna_offset_db: 20.0 }
+  office:  { room: office,  x: 7.0, y: 9.8, z: 1.8, antenna_offset_db: 20.0 }
+
+phone_height_m: 1.1
+
+# Attenuation between a phone in room A and a node in room B, in dB.
+# Anything not listed uses default_wall_penalty_db.
+default_wall_penalty_db: 8.0
+wall_penalties:
+  - { between: [living, kitchen], db: 4.0 }   # open plan archway
+  - { between: [living, hall],    db: 3.0 }   # open doorway
+  - { between: [kitchen, hall],   db: 5.0 }
+  - { between: [hall, bedroom],   db: 6.0 }   # closed door
+  - { between: [hall, office],    db: 6.0 }
+  - { between: [bedroom, office], db: 8.0 }
+  - { between: [living, bedroom], db: 10.0 }
+  - { between: [living, office],  db: 10.0 }
+  - { between: [kitchen, office], db: 9.0 }
+  - { between: [kitchen, bedroom], db: 12.0 }
+  - { between: [garage, kitchen], db: 10.0 }  # brick party wall
+  - { between: [garage, living],  db: 11.0 }
+  - { between: [garage, hall],    db: 12.0 }
+  - { between: [garage, bedroom], db: 15.0 }
+  - { between: [garage, office],  db: 15.0 }
