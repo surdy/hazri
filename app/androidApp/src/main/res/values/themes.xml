@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The window theme only has to get the app to its first frame without a white flash;
+      everything after that is Compose. Background matches HazriColors.background.
+    -->
+    <style name="Theme.Hazri" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/hazri_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/hazri_nav_background</item>
+    </style>
+</resources>
