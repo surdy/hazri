@@ -267,7 +267,7 @@ stat_tiles = "".join(
     f'<div style="display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; background: #12151a; border-radius: 10px;"><div style="font-size: 11px; color: #8b92a0; font-weight: 600;">{k}</div><div class="mono" style="font-size: 14px; font-weight: 600;">{v}</div></div>'
     for k, v in stats)
 
-cfg = [("room", "kitchen"), ("ref_rssi", "−59 dBm"), ("absorption", "3.5"), ("max_distance", "6 m")]
+cfg = [("room", "kitchen"), ("ref_rssi", "−65 dBm"), ("absorption", "2.7"), ("max_distance", "16 m")]
 cfg_rows = "".join(
     f'<div style="display: flex; justify-content: space-between; align-items: center; height: 40px; border-bottom: 1px solid #22262f;"><div class="mono" style="font-size: 13px; color: #aeb4c0;">{k}</div><div class="mono" style="font-size: 13px; font-weight: 600;">{v}</div></div>'
     for k, v in cfg)
