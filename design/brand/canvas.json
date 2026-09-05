@@ -1,0 +1,11 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Icon candidates", "x": 0, "y": 0, "w": 1120, "h": 640 },
+    { "file": "Header.dc.html", "title": "README banner (A)", "x": 0, "y": 780, "w": 1000, "h": 240 },
+    { "file": "Adaptive.dc.html", "title": "Adaptive icon (A)", "x": 1080, "y": 780, "w": 560, "h": 260 }
+  ],
+  "annotations": [
+    { "id": "rec", "x": 1200, "y": 0, "w": 300, "text": "Recommendation: A, register tick. It is the tool glyph the suite is built on (nib, box, coins, register) and it carries the name. B if you would rather the icon say radio than roll call." }
+  ],
+  "launch": { "view": "canvas" }
+}
