@@ -43,8 +43,8 @@ marked "(unverified)".
 
 | Path | Contents |
 |---|---|
-| `app/` | Kotlin Multiplatform / Compose Multiplatform app, Android first |
-| `tools/espresense-sim/` | Simulated ESPresense fleet for development without hardware |
+| `app/` | Kotlin Multiplatform / Compose Multiplatform app, Android first. Build notes in [app/README.md](app/README.md) |
+| `tools/espresense-sim/` | Simulated ESPresense fleet for development without hardware. See [its README](tools/espresense-sim/README.md) |
 | `docs/` | Plan, decision records, guides, protocol reference |
 | `design/` | Design canvas artboards for the app mockups |
 
