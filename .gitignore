@@ -1,0 +1,27 @@
+# Gradle / Android
+.gradle/
+build/
+*/build/
+**/build/
+local.properties
+.kotlin/
+*.apk
+*.aab
+captures/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Design canvas output (rebuilt from the .dc.html sources)
+design/hazri-app-mockups.html

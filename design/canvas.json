@@ -1,0 +1,16 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Live signals", "x": 0, "y": 0, "w": 390, "h": 844 },
+    { "file": "Survey.dc.html", "title": "Room survey", "x": 470, "y": 0, "w": 390, "h": 844 },
+    { "file": "Coverage.dc.html", "title": "Coverage matrix", "x": 940, "y": 0, "w": 390, "h": 844 },
+    { "file": "NodeDetail.dc.html", "title": "Node detail", "x": 1410, "y": 0, "w": 390, "h": 844 },
+    { "file": "Tools.dc.html", "title": "Tools", "x": 1880, "y": 0, "w": 390, "h": 844 },
+    { "file": "LightAlternate.dc.html", "title": "Alt · light clinical", "x": 0, "y": 1000, "w": 390, "h": 844 }
+  ],
+  "annotations": [
+    { "id": "flow", "x": 0, "y": -170, "w": 560, "text": "Hazri — walk-around BLE placement tool for the M5Stack nodes.\nFlow: Live (what's strongest right now) → Survey (record a room) → Coverage (rooms × nodes, verdict + suggestions). Node detail opens from any node card. Tools holds calibration, beacon check, MQTT inspector, export, settings." },
+    { "id": "margin", "x": 940, "y": -130, "w": 420, "text": "Key number everywhere is the MARGIN: best node minus second-best in a room. Under ~5 dB = Tight (HA will flap). No node above −85 = Blind." },
+    { "id": "alt", "x": 470, "y": 1000, "w": 300, "text": "Low-fi alternate, kept beside the dark direction. Say the word and I'll rebuild the five screens in this style instead." }
+  ],
+  "launch": { "view": "canvas" }
+}
